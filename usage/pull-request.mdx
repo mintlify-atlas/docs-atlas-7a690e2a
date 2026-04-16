@@ -1,0 +1,206 @@
+---
+title: "Using changed-files on pull_request events"
+description: "Detect changed files in pull requests using local git history or GitHub's REST API. Covers both methods, their trade-offs, and when to use each."
+---
+
+The `pull_request` event is the most common trigger for `changed-files`. When a PR is opened or updated, the action compares the PR branch against the target branch (or the last pushed commit on the PR branch) and returns the files that changed. Two diff methods are available: the local git directory method works for all PR events and supports every input, while GitHub's REST API method is simpler to configure but has hard limits and only works for `pull_request*` events.
+
+<Tabs>
+  <Tab title="Local git directory">
+
+The local git directory method uses the repository's `.git` history to compute the diff. It requires `actions/checkout@v4` to be run before this action, but it works for all `pull_request*` events, supports every input, and has no file count limit.
+
+By default, the action compares the last commit on the target branch against the current HEAD of the PR branch. Set `since_last_remote_commit: true` to compare against the last pushed commit on the PR branch instead of the target branch.
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ------------------------------------------------------------------------------------------------------------------------------------------------
+  # Event `pull_request`: Compare the last commit of the main branch or last remote commit of the PR branch -> to the current commit of a PR branch.
+  # ------------------------------------------------------------------------------------------------------------------------------------------------
+  changed_files:
+    runs-on: ubuntu-latest  # windows-latest || macos-latest
+    name: Test changed-files
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------------------------------------------
+      # Example 1
+      # -----------------------------------------------------------------------------------------------------------
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        # To compare changes between the current commit and the last pushed remote commit set `since_last_remote_commit: true`. e.g
+        # with:
+        #   since_last_remote_commit: true
+
+      - name: List all changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+
+      # -----------------------------------------------------------------------------------------------------------
+      # Example 2
+      # -----------------------------------------------------------------------------------------------------------
+      - name: Get all changed markdown files
+        id: changed-markdown-files
+        uses: tj-actions/changed-files@v47
+        with:
+          # Avoid using single or double quotes for multiline patterns
+          files: |
+            **.md
+            docs/**.md
+
+      - name: List all changed files markdown files
+        if: steps.changed-markdown-files.outputs.any_changed == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-markdown-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+
+      # -----------------------------------------------------------------------------------------------------------
+      # Example 3
+      # -----------------------------------------------------------------------------------------------------------
+      - name: Get all test, doc and src files that have changed
+        id: changed-files-yaml
+        uses: tj-actions/changed-files@v47
+        with:
+          files_yaml: |
+            doc:
+              - '**.md'
+              - docs/**
+            test:
+              - test/**
+              - '!test/**.md'
+            src:
+              - src/**
+          # Optionally set `files_yaml_from_source_file` to read the YAML from a file. e.g `files_yaml_from_source_file: .github/changed-files.yml`
+
+      - name: Run step if test file(s) change
+        # NOTE: Ensure all outputs are prefixed by the same key used above e.g. `test_(...)` | `doc_(...)` | `src_(...)` when trying to access the `any_changed` output.
+        if: steps.changed-files-yaml.outputs.test_any_changed == 'true'
+        env:
+          TEST_ALL_CHANGED_FILES: ${{ steps.changed-files-yaml.outputs.test_all_changed_files }}
+        run: |
+          echo "One or more test file(s) has changed."
+          echo "List all the files that have changed: $TEST_ALL_CHANGED_FILES"
+
+      - name: Run step if doc file(s) change
+        if: steps.changed-files-yaml.outputs.doc_any_changed == 'true'
+        env:
+          DOC_ALL_CHANGED_FILES: ${{ steps.changed-files-yaml.outputs.doc_all_changed_files }}
+        run: |
+          echo "One or more doc file(s) has changed."
+          echo "List all the files that have changed: $DOC_ALL_CHANGED_FILES"
+
+      # -----------------------------------------------------------------------------------------------------------
+      # Example 4
+      # -----------------------------------------------------------------------------------------------------------
+      - name: Get changed files in the docs folder
+        id: changed-files-specific
+        uses: tj-actions/changed-files@v47
+        with:
+          files: docs/*.{js,html}  # Alternatively using: `docs/**`
+          files_ignore: docs/static.js
+
+      - name: Run step if any file(s) in the docs folder change
+        if: steps.changed-files-specific.outputs.any_changed == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files-specific.outputs.all_changed_files }}
+        run: |
+          echo "One or more files in the docs folder has changed."
+          echo "List all the files that have changed: $ALL_CHANGED_FILES"
+```
+
+  </Tab>
+  <Tab title="GitHub REST API">
+
+The REST API method calls GitHub's compare API to retrieve changed files. No checkout step is required — the action uses the `GITHUB_TOKEN` (provided automatically) to make the API request. However, this method has important restrictions:
+
+- Only works for `pull_request*` events. Using it on any other event raises an error.
+- Returns a maximum of 3,000 changed files.
+- Requires the `pull-requests: read` permission.
+- Some inputs are not supported (the action will emit a warning for unsupported inputs).
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # -------------------------------------------------------------
+  # Event `pull_request`: Returns all changed pull request files.
+  # --------------------------------------------------------------
+  changed_files:
+    # NOTE:
+    # - This is limited to pull_request* events and would raise an error for other events.
+    # - A maximum of 3000 files can be returned.
+    # - For more flexibility and no limitations see "Using local .git directory" above.
+
+    runs-on: ubuntu-latest  # windows-latest || macos-latest
+    name: Test changed-files
+    permissions:
+      pull-requests: read
+
+    steps:
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: List all changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+```
+
+<Note>
+The REST API method is automatically selected when no local `.git` directory is present and the event is a `pull_request*` event. You can also force it explicitly with `use_rest_api: true`.
+</Note>
+
+  </Tab>
+</Tabs>
+
+## Choosing a method
+
+| | Local git directory | GitHub REST API |
+|---|---|---|
+| Requires `actions/checkout` | Yes | No |
+| Supported events | All | `pull_request*` only |
+| File count limit | None | 3,000 files |
+| Supports all inputs | Yes | No (warns on unsupported inputs) |
+| Required permission | None beyond default | `pull-requests: read` |
+
+<Tip>
+For most workflows, the local git directory method is the right choice. It has no file count limit, works for all event types, and supports every input. Use the REST API method when you want to avoid a checkout step and your PR will never exceed 3,000 changed files.
+</Tip>
+
+## Comparing against the last pushed commit
+
+By default on `pull_request` events, the action compares the last commit on the target branch against the current HEAD of the PR branch. To compare against the last remote commit on the PR branch instead — for example, to detect only what changed in the most recent push — set `since_last_remote_commit: true`:
+
+```yaml
+- name: Get changed files since last push
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    since_last_remote_commit: true
+```
+
+See [inputs](/reference/inputs) for the full list of available options including `sha`, `base_sha`, `since`, and `until`.

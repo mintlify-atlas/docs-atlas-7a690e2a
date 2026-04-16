@@ -1,0 +1,158 @@
+---
+title: "Output changed directory names instead of file paths"
+description: "Use dir_names and related inputs to output changed directory names instead of individual file paths, with depth limits and exclusion rules."
+---
+
+By default, the action outputs individual file paths. When you set `dir_names: true`, it outputs the unique directories that contain changed files instead. This is useful in monorepos and large repositories where you want to know which packages or top-level directories were affected, not every file within them.
+
+## Basic usage
+
+```yaml
+- name: Get changed directories
+  id: changed-files-dir-names
+  uses: tj-actions/changed-files@v47
+  with:
+    dir_names: "true"
+
+- name: List changed directories
+  env:
+    ALL_CHANGED_DIRS: ${{ steps.changed-files-dir-names.outputs.all_changed_files }}
+  run: |
+    for dir in ${ALL_CHANGED_DIRS}; do
+      echo "$dir was changed"
+    done
+```
+
+<Note>
+When `dir_names` is enabled, all the standard outputs (`all_changed_files`, `added_files`, `deleted_files`, etc.) contain directory names rather than file paths. The output variable names remain unchanged.
+</Note>
+
+## Current directory (`.`)
+
+When a changed file lives directly in `$GITHUB_WORKSPACE` (the repository root), its directory is reported as `.`. If you do not want `.` to appear in your output — for example, when you only care about changes to named subdirectories — use `dir_names_exclude_current_dir`.
+
+```yaml
+- name: Get changed directories excluding root
+  id: changed-files-dir-names
+  uses: tj-actions/changed-files@v47
+  with:
+    dir_names: "true"
+    dir_names_exclude_current_dir: "true"
+```
+
+## Limiting depth with `dir_names_max_depth`
+
+Deep directory trees can produce very specific paths. `dir_names_max_depth` truncates the output to a maximum number of path segments. For example, a changed file at `test/test1/test2/file.txt` with `dir_names_max_depth: 2` produces `test/test1`.
+
+```yaml
+- name: Get changed top-level packages
+  id: changed-packages
+  uses: tj-actions/changed-files@v47
+  with:
+    dir_names: "true"
+    dir_names_max_depth: "2"
+```
+
+<Tip>
+Setting `dir_names_max_depth` to `1` returns only the immediate top-level directory for every changed file, which is a convenient way to identify which top-level packages in a monorepo were touched.
+</Tip>
+
+## Including specific files alongside directory names
+
+`dir_names_include_files` lets you specify file patterns that should appear individually in the output in addition to the directory names. Matching files are included as-is rather than being collapsed into their parent directory.
+
+```yaml
+- name: Get changed dirs and include root config files
+  id: changed-files-dir-names
+  uses: tj-actions/changed-files@v47
+  with:
+    dir_names: "true"
+    dir_names_include_files: |
+      package.json
+      *.config.js
+```
+
+## Deleted directories
+
+When `dir_names` is enabled and files are deleted, the action reports the directory that contained the deleted file. If you only want to know about directories that were themselves deleted (not just directories that lost some files), set `dir_names_deleted_files_include_only_deleted_dirs: true`.
+
+```yaml
+- name: Get only deleted directories
+  id: changed-files-deleted-dirs
+  uses: tj-actions/changed-files@v47
+  with:
+    dir_names: "true"
+    dir_names_deleted_files_include_only_deleted_dirs: "true"
+```
+
+## Complete workflow example
+
+The following example detects which top-level packages changed and prints each one.
+
+```yaml
+name: Detect changed packages
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed top-level directories
+        id: changed-dirs
+        uses: tj-actions/changed-files@v47
+        with:
+          dir_names: "true"
+          dir_names_max_depth: "1"
+          dir_names_exclude_current_dir: "true"
+
+      - name: Print changed packages
+        if: steps.changed-dirs.outputs.any_changed == 'true'
+        env:
+          ALL_CHANGED_DIRS: ${{ steps.changed-dirs.outputs.all_changed_files }}
+        run: |
+          for dir in ${ALL_CHANGED_DIRS}; do
+            echo "Package changed: $dir"
+          done
+```
+
+<AccordionGroup>
+  <Accordion title="Using dir_names with files_yaml for per-package detection">
+    You can combine `dir_names: true` with `files_yaml` to produce directory-level output scoped to specific pattern groups.
+
+    ```yaml
+    - name: Get changed dirs per group
+      id: changed-files-yaml
+      uses: tj-actions/changed-files@v47
+      with:
+        dir_names: "true"
+        dir_names_max_depth: "1"
+        files_yaml: |
+          frontend:
+            - frontend/**
+          backend:
+            - backend/**
+    ```
+
+    Access results with `frontend_all_changed_files` and `backend_all_changed_files`, which will contain directory names rather than file paths.
+  </Accordion>
+</AccordionGroup>
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="Monorepos" icon="boxes-stacked" href="/guides/monorepos">
+    Use directory detection to drive per-package CI jobs.
+  </Card>
+  <Card title="File filtering" icon="filter" href="/guides/file-filtering">
+    Narrow detection to specific files before applying dir_names.
+  </Card>
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Full reference for all dir_names inputs.
+  </Card>
+</CardGroup>

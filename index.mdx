@@ -1,97 +1,94 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "changed-files: Detect file changes in GitHub Actions"
+description: "Track every added, modified, deleted, and renamed file in pull requests and pushes. Supports glob patterns, YAML filters, monorepos, and matrix jobs."
 ---
 
-## Setting up
+`changed-files` is a GitHub Action that detects exactly which files changed in a pull request or push event — so your workflows only run the steps that matter. It supports glob patterns, YAML-based file grouping, directory outputs, matrix job generation, and file recovery, all in 0–10 seconds.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Add changed-files to your workflow and list every changed file in under 5 minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Pull request usage" icon="code-pull-request" href="/usage/pull-request">
+    Detect changed files in pull requests using local git history or GitHub's REST API.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="File filtering" icon="filter" href="/guides/file-filtering">
+    Scope change detection to specific files and directories using glob patterns.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="All inputs" icon="sliders" href="/reference/inputs">
+    Complete reference for every input parameter the action accepts.
   </Card>
-</Columns>
+  <Card title="All outputs" icon="arrow-up-right-dots" href="/reference/outputs">
+    Every output variable the action sets, with descriptions and types.
+  </Card>
+  <Card title="Matrix jobs" icon="table-cells" href="/guides/matrix-jobs">
+    Generate JSON output to fan out matrix jobs based on changed files.
+  </Card>
+</CardGroup>
 
-## Create beautiful pages
+## How it works
 
-Everything you need to create world-class documentation.
+`changed-files` compares two commits and produces a categorized list of every file that changed between them. On pull request events it compares the PR branch against the base branch. On push events it compares the current commit against the preceding remote commit.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+<Steps>
+  <Step title="Add actions/checkout to your workflow">
+    Check out your repository so the action has access to the local git history.
 
-## Need inspiration?
+    ```yaml
+    - uses: actions/checkout@v4
+    ```
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    <Note>For push events, set `fetch-depth: 0` or `fetch-depth: 2` to ensure at least two commits are available for comparison.</Note>
+  </Step>
+  <Step title="Add the changed-files step">
+    Run the action and capture its output with an `id`.
+
+    ```yaml
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@v47
+    ```
+  </Step>
+  <Step title="Use the outputs in subsequent steps">
+    Reference any output using `steps.<id>.outputs.<output_name>`.
+
+    ```yaml
+    - name: List all changed files
+      env:
+        ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      run: |
+        for file in ${ALL_CHANGED_FILES}; do
+          echo "$file was changed"
+        done
+    ```
+  </Step>
+</Steps>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="All change types" icon="file-circle-check">
+    Detects Added, Copied, Modified, Deleted, Renamed, Type-changed, Unmerged, and Unknown files (ACMRDTUX).
+  </Card>
+  <Card title="Glob and YAML filtering" icon="magnifying-glass">
+    Scope detection to specific files and directories using glob patterns or a structured YAML definition.
+  </Card>
+  <Card title="Directory output" icon="folder-open">
+    List changed directories instead of files, with configurable maximum depth.
+  </Card>
+  <Card title="Matrix job support" icon="table-cells-large">
+    Output changed files as escaped JSON to dynamically populate GitHub Actions matrix jobs.
+  </Card>
+  <Card title="Monorepo ready" icon="sitemap">
+    Use YAML keys to track changes across multiple packages or services in a single repository.
+  </Card>
+  <Card title="File recovery" icon="rotate-left">
+    Restore deleted files to their original location or a new destination as part of the workflow.
+  </Card>
+  <Card title="Submodule support" icon="code-branch">
+    Detect changes inside Git submodules and fetch additional submodule history when needed.
+  </Card>
+  <Card title="Cross-platform" icon="display">
+    Runs on Ubuntu, macOS, and Windows GitHub-hosted and self-hosted runners.
+  </Card>
+</CardGroup>

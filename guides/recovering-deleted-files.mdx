@@ -1,0 +1,141 @@
+---
+title: "Restore deleted files for downstream processing in CI"
+description: "Use recover_deleted_files to restore files removed in a commit so downstream steps can process them — ideal for CDN cleanup, asset pipelines, and more."
+---
+
+When files are deleted in a commit, they are no longer present on disk during a workflow run. Some downstream tasks — removing entries from a CDN, cleaning up compiled assets, or running a custom script against the deleted content — require the file to be present. The `recover_deleted_files` input restores deleted files to their original location (or a new destination) before subsequent steps run.
+
+## Basic recovery
+
+Set `recover_deleted_files: true` to restore all deleted files detected in the diff to their original locations.
+
+```yaml
+- name: Get changed files and recover deleted files
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    recover_deleted_files: "true"
+```
+
+After this step runs, any file that was deleted in the triggering commit is restored to its original path in the workspace. Subsequent steps can read or process those files normally.
+
+## Recovering to a different destination
+
+Use `recover_deleted_files_to_destination` to place recovered files in a different directory instead of their original location. The action re-creates the original directory structure under the destination path.
+
+```yaml
+- name: Recover deleted files to a staging directory
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    recover_deleted_files: "true"
+    recover_deleted_files_to_destination: /tmp/deleted-files
+```
+
+If a file was deleted from `public/images/logo.png`, it will be restored to `/tmp/deleted-files/public/images/logo.png`.
+
+## Filtering which files are recovered
+
+By default, when `recover_deleted_files` is `true`, the action recovers all deleted files. Use `recover_files` to limit recovery to a specific subset of patterns.
+
+```yaml
+- name: Recover only deleted image files
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    recover_deleted_files: "true"
+    recover_files: |
+      public/images/**
+      assets/**/*.png
+```
+
+If `files`, `files_from_source_file`, `files_ignore`, or `files_ignore_from_source_file` are set, they are used as the default recovery patterns when `recover_files` is not explicitly provided.
+
+## Excluding files from recovery
+
+Use `recover_files_ignore` to exclude specific patterns from being recovered, even when they match `recover_files`.
+
+```yaml
+- name: Recover deleted files, excluding logs
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    recover_deleted_files: "true"
+    recover_files: public/**
+    recover_files_ignore: |
+      public/**/*.log
+      public/tmp/**
+```
+
+## Treating renames as delete and add
+
+By default, renamed files are reported as a single rename event (`R`). Setting `output_renamed_files_as_deleted_and_added: true` splits a rename into a deletion of the old path and an addition of the new path. When combined with `recover_deleted_files`, the old path will be restored to disk.
+
+```yaml
+- name: Treat renames as delete and add
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    recover_deleted_files: "true"
+    output_renamed_files_as_deleted_and_added: "true"
+```
+
+## Complete example: CDN cleanup workflow
+
+The following workflow detects deleted files, recovers them to a staging directory, and then passes each path to a hypothetical CDN purge script.
+
+```yaml
+name: CDN Cleanup
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files and recover deleted assets
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          recover_deleted_files: "true"
+          recover_deleted_files_to_destination: /tmp/deleted-assets
+          recover_files: |
+            public/**
+          recover_files_ignore: |
+            public/**/*.map
+
+      - name: Purge deleted files from CDN
+        if: steps.changed-files.outputs.any_deleted == 'true'
+        env:
+          DELETED_FILES: ${{ steps.changed-files.outputs.deleted_files }}
+        run: |
+          for file in ${DELETED_FILES}; do
+            echo "Purging from CDN: $file"
+            # ./scripts/cdn-purge.sh "$file"
+          done
+```
+
+<Warning>
+Recovered files are written to the runner's workspace and exist only for the duration of the workflow run. They are not committed back to the repository.
+</Warning>
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="File filtering" icon="filter" href="/guides/file-filtering">
+    Use files and files_ignore to scope which deleted files are recovered.
+  </Card>
+  <Card title="Outputs reference" icon="arrow-up-right" href="/reference/outputs">
+    See deleted_files and related outputs.
+  </Card>
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Full reference for recover_deleted_files inputs.
+  </Card>
+</CardGroup>

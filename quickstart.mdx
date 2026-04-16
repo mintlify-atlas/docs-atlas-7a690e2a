@@ -1,80 +1,195 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quickstart: detect changed files in 5 minutes"
+description: "Add tj-actions/changed-files to a GitHub Actions workflow, access file lists and boolean outputs, and conditionally run steps based on what changed."
 ---
 
-## Get started in three steps
+This guide walks you through adding `changed-files` to an existing GitHub Actions workflow. By the end you will have a working workflow that lists every file changed in a pull request and conditionally runs a step based on which files were affected.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Add actions/checkout to your workflow">
+    `changed-files` reads your repository's git history to determine what changed. The `actions/checkout` step must appear before it in your job.
 
-### Step 1: Set up your local environment
+    ```yaml
+    - uses: actions/checkout@v4
+    ```
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Warning>
+      For `push` events, `actions/checkout` defaults to a shallow clone with only the latest commit. Set `fetch-depth: 0` (full history) or `fetch-depth: 2` (preceding commit only) so the action has two commits to compare.
 
-### Step 2: Deploy your changes
+      ```yaml
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # or 2
+      ```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+      For `pull_request` events the default `fetch-depth: 1` is sufficient.
+    </Warning>
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Add the changed-files step">
+    Add the action with an `id` so you can reference its outputs in later steps.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```yaml
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@v47
+    ```
 
-### Step 3: Go live
+    <Note>
+      For security, consider pinning to a specific commit SHA instead of a tag. Tags are mutable and can be moved. Use the tag comment to track the version.
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+      ```yaml
+      uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323 # v47.0.5
+      ```
+    </Note>
+  </Step>
+
+  <Step title="Access the outputs">
+    Reference outputs using `steps.<id>.outputs.<output_name>`. The most commonly used output is `all_changed_files`, which returns a space-separated list of every added, copied, modified, and renamed file (ACMR).
+
+    ```yaml
+    - name: List all changed files
+      env:
+        ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      run: |
+        for file in ${ALL_CHANGED_FILES}; do
+          echo "$file was changed"
+        done
+    ```
+
+    See [all outputs](/reference/outputs) for the complete list of available output variables.
+  </Step>
+</Steps>
+
+## Complete working example
+
+The following workflow runs on every pull request targeting `main`, lists all changed files, and also shows how to filter to specific file types and use the `any_changed` boolean output.
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  changed_files:
+    runs-on: ubuntu-latest  # windows-latest || macos-latest
+    name: Test changed-files
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------------------------------------------
+      # Example 1 — list all changed files
+      # -----------------------------------------------------------------------------------------------------------
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323 # v47.0.5
+
+      - name: List all changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+
+      # -----------------------------------------------------------------------------------------------------------
+      # Example 2 — filter to specific file patterns
+      # -----------------------------------------------------------------------------------------------------------
+      - name: Get all changed markdown files
+        id: changed-markdown-files
+        uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323 # v47.0.5
+        with:
+          # Avoid using single or double quotes for multiline patterns
+          files: |
+            **.md
+            docs/**.md
+
+      - name: List all changed markdown files
+        if: steps.changed-markdown-files.outputs.any_changed == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-markdown-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+```
+
+## Filtering to specific files
+
+Use the `files` input to restrict change detection to a subset of paths. The input accepts glob patterns, one per line. Multiline values should not use surrounding quotes.
+
+```yaml
+- name: Get changed files
+  id: changed-files-specific
+  uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323 # v47.0.5
+  with:
+    files: |
+      my-file.txt
+      *.sh
+      *.png
+      !*.md
+      test_directory/**
+      **/*.sql
+```
+
+Supported pattern features:
+
+- **Globstar** — `**` matches any number of path segments
+- **Brace expansion** — `docs/*.{js,html}` matches multiple extensions
+- **Negation** — prefix a pattern with `!` to exclude matching paths
+
+Use `files_ignore` to exclude specific paths without affecting which files are included in the scan.
+
+<Tip>
+  To match all files and subdirectories under a directory, use a globstar pattern: `dir_name/**`. A plain `dir_name/` only matches files directly inside the directory.
+</Tip>
+
+## Running steps conditionally with `any_changed`
+
+The `any_changed` output returns `"true"` when at least one file matching the `files` input has changed. Use it in a step's `if` condition to skip unnecessary work.
+
+```yaml
+- name: Get changed files in the docs folder
+  id: changed-files-specific
+  uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323 # v47.0.5
+  with:
+    files: docs/*.{js,html}
+    files_ignore: docs/static.js
+
+- name: Run step if any file(s) in the docs folder change
+  if: steps.changed-files-specific.outputs.any_changed == 'true'
+  env:
+    ALL_CHANGED_FILES: ${{ steps.changed-files-specific.outputs.all_changed_files }}
+  run: |
+    echo "One or more files in the docs folder has changed."
+    echo "List all the files that have changed: $ALL_CHANGED_FILES"
+```
+
+Other useful boolean outputs follow the same pattern:
+
+| Output | Returns `"true"` when… |
+|--------|------------------------|
+| `any_changed` | Any matched file was added, copied, modified, or renamed (ACMR) |
+| `only_changed` | Only matched files changed — no other files were touched |
+| `any_modified` | Any matched file was added, copied, modified, renamed, or deleted (ACMRD) |
+| `any_deleted` | Any matched file was deleted |
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Every input the action accepts, with types, defaults, and descriptions.
+  </Card>
+  <Card title="Outputs reference" icon="arrow-up-right-dots" href="/reference/outputs">
+    Every output the action produces, including per-type file lists and counts.
+  </Card>
+  <Card title="Pull request usage" icon="code-pull-request" href="/usage/pull-request">
+    Detailed examples for pull_request events using local git and GitHub's API.
+  </Card>
+  <Card title="File filtering guide" icon="filter" href="/guides/file-filtering">
+    In-depth guide to glob patterns, YAML filters, and ignore rules.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

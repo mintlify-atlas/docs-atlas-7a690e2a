@@ -1,0 +1,264 @@
+---
+title: "Using changed-files with other GitHub events"
+description: "Configure changed-files for schedule, release, workflow_dispatch, workflow_run, merge_group, issue_comment, and other GitHub Actions events."
+---
+
+Beyond `pull_request` and `push`, `changed-files` supports a broad set of GitHub Actions events. For most of these events, the action uses the local `.git` directory to compute the diff, so `actions/checkout` is required. Some events do not carry a built-in base commit reference, which means you need to supply `sha` or `base_sha` explicitly to define the comparison range.
+
+The full list of supported events includes:
+
+- `schedule`
+- `release`
+- `workflow_dispatch`
+- `workflow_run`
+- `merge_group`
+- `issue_comment`
+- and many more
+
+<Note>
+For events that do not have a natural base commit (such as `schedule` or `workflow_dispatch`), you must specify the `sha` or `base_sha` inputs so the action knows which commits to compare. Without these inputs, the action falls back to the preceding local commit, which may not produce the diff you expect. See [inputs](/reference/inputs) for details on `sha` and `base_sha`.
+</Note>
+
+## Merge group
+
+The `merge_group` event fires when a pull request enters GitHub's merge queue. `changed-files` supports this event natively — it uses the merge group's base ref as the comparison point, just like a normal `pull_request` event.
+
+```yaml
+name: CI
+
+on:
+  merge_group:
+
+jobs:
+  changed_files:
+    runs-on: ubuntu-latest
+    name: Test changed-files
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: List all changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+```
+
+## Release
+
+The `release` event fires when a GitHub release is published, edited, or deleted. A common pattern is to detect which files changed between the previous tag and the current tag. Set `fetch-depth: 0` to ensure the full tag history is available.
+
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: List changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          echo "List all the files that have changed: $ALL_CHANGED_FILES"
+
+      - name: Get changed files in the .github folder
+        id: changed-files-specific
+        uses: tj-actions/changed-files@v47
+        with:
+          files: .github/**
+
+      - name: Run step if any file(s) in the .github folder change
+        if: steps.changed-files-specific.outputs.any_changed == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files-specific.outputs.all_changed_files }}
+        run: |
+          echo "One or more files in the .github folder has changed."
+          echo "List all the files that have changed: $ALL_CHANGED_FILES"
+```
+
+## Workflow dispatch
+
+The `workflow_dispatch` event allows workflows to be triggered manually via the GitHub UI or API. The action computes the diff against the preceding local commit. You can also pass file patterns as an input to filter the results at runtime.
+
+```yaml
+name: Manual Triggered Job Example
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        required: false
+        type: string
+        default: |
+          **.md **/**.md test/*.txt
+
+jobs:
+  test:
+    name: Test changed-files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run changed-files with defaults
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: Show output
+        run: |
+          echo '${{ toJSON(steps.changed-files.outputs) }}'
+
+      - name: Run changed-files with glob filtering
+        id: changed-files-glob
+        uses: tj-actions/changed-files@v47
+        with:
+          files: ${{ inputs.files }}
+          files_separator: " "  # Space delimited files (default is "\n")
+
+      - name: Show output
+        run: |
+          echo '${{ toJSON(steps.changed-files-glob.outputs) }}'
+```
+
+## Workflow run
+
+The `workflow_run` event fires when another workflow completes. The action can detect which files changed in the commit that triggered the parent workflow. Check `github.event.workflow_run.conclusion` to run different steps based on whether the parent workflow succeeded or failed.
+
+```yaml
+name: Workflow Run Example
+
+on:
+  workflow_run:
+    workflows: [Matrix Example]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  on-success:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: Echo list of changed files on success
+        run: |
+          echo "Changed files on success:"
+          echo "${{ steps.changed-files.outputs.all_changed_files }}"
+
+  on-failure:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: Echo list of changed files on failure
+        run: |
+          echo "Changed files on failure:"
+          echo "${{ steps.changed-files.outputs.all_changed_files }}"
+```
+
+## Issue comment
+
+The `issue_comment` event fires when a comment is added to an issue or pull request. When the comment is on a pull request, you can use `changed-files` to detect what has changed in that PR. Use the `github.event.issue.pull_request` context to distinguish PR comments from issue comments.
+
+```yaml
+name: Issue Comment Job Example
+
+permissions:
+  contents: read
+
+on:
+  issue_comment:
+
+jobs:
+  pr_commented:
+    # This job only runs for pull request comments
+    name: PR comment
+    if: ${{ github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo A comment on PR $NUMBER
+        env:
+          NUMBER: ${{ github.event.issue.number }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run changed-files with defaults
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: Show output
+        run: |
+          echo '${{ toJSON(steps.changed-files.outputs) }}'
+```
+
+## Schedule and other events without a natural base commit
+
+For `schedule` and similar events, there is no pull request or push payload to derive a base commit from. The action falls back to the preceding local commit, which may span many commits depending on when the workflow last ran.
+
+To get a predictable diff, supply `sha` and `base_sha` explicitly:
+
+```yaml
+- name: Get changed files since a known commit
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    base_sha: ${{ env.LAST_KNOWN_GOOD_SHA }}
+    sha: ${{ github.sha }}
+```
+
+You can also use the `since` and `until` inputs to bound the comparison by timestamp rather than by commit SHA:
+
+```yaml
+- name: Get changed files in the past 24 hours
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    since: "2022-08-19"
+    until: "2022-08-20"
+```
+
+<Tip>
+When using `schedule` events in monorepos or large repositories, consider storing the last successful commit SHA as an artifact or workflow output so you can pass it as `base_sha` on the next run. This avoids unbounded diffs that span many days of commits.
+</Tip>
+
+See the [inputs reference](/reference/inputs) for full documentation on `sha`, `base_sha`, `since`, and `until`.

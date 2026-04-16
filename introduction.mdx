@@ -1,0 +1,109 @@
+---
+title: "Introduction to tj-actions/changed-files"
+description: "Learn how changed-files detects added, modified, deleted, and renamed files in GitHub Actions workflows across pull requests, pushes, and more."
+---
+
+`changed-files` is a GitHub Action that identifies exactly which files changed between two commits and exposes them as structured workflow outputs. Instead of running every CI step on every push, you can scope work to only the files that actually changed — making workflows faster, cheaper, and easier to reason about.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Add changed-files to a workflow and list every changed file in under 5 minutes.
+  </Card>
+  <Card title="Pull request usage" icon="code-pull-request" href="/usage/pull-request">
+    Detect changed files in pull requests using local git history or GitHub's REST API.
+  </Card>
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Complete reference for every input parameter the action accepts.
+  </Card>
+  <Card title="Outputs reference" icon="arrow-up-right-dots" href="/reference/outputs">
+    Every output variable the action sets, with descriptions and types.
+  </Card>
+</CardGroup>
+
+## What it does
+
+`changed-files` compares two commits and produces a categorized list of every file that changed between them. On `pull_request` events it compares the PR branch against the target branch. On `push` events it compares the current commit against the preceding remote commit. The outputs include per-category file lists (e.g. `added_files`, `deleted_files`), counts for each category, and boolean flags like `any_changed` that make conditional step execution straightforward.
+
+The action does not detect uncommitted or staged changes made during a workflow run. It only reports changes that exist in committed git history.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Fast execution" icon="bolt">
+    Averages 0–10 seconds per run. Uses either GitHub's REST API or Git's native diff command depending on the event type and configuration.
+  </Card>
+  <Card title="All change types" icon="file-circle-check">
+    Reports Added, Copied, Modified, Deleted, Renamed, Type-changed, Unmerged, and Unknown files — the full set of Git change classifications.
+  </Card>
+  <Card title="Glob and YAML filtering" icon="filter">
+    Scope detection to specific paths using glob patterns with Globstar, brace expansion, and negation. Define named file groups with YAML syntax.
+  </Card>
+  <Card title="Directory output" icon="folder-open">
+    Output changed directory names instead of filenames, with configurable maximum depth and optional exclusion of the current directory.
+  </Card>
+  <Card title="Matrix job support" icon="table-cells-large">
+    Output changed files as escaped JSON to dynamically populate GitHub Actions matrix jobs based on what actually changed.
+  </Card>
+  <Card title="Monorepo ready" icon="sitemap">
+    Use YAML keys to track changes across multiple packages or services in a single repository, with per-key boolean and file-list outputs.
+  </Card>
+  <Card title="Git submodule support" icon="code-branch">
+    Detect changes inside Git submodules and optionally fetch additional submodule history for accurate diffs.
+  </Card>
+  <Card title="File recovery" icon="rotate-left">
+    Restore deleted files to their original location or a specified destination directory as part of the workflow.
+  </Card>
+  <Card title="Scales to large repos" icon="chart-line">
+    Designed to handle large and mono repositories. Supports fetching a fixed number of commits to improve performance on shallow clones.
+  </Card>
+  <Card title="Output files" icon="file-export">
+    Write outputs to `.txt` or `.json` files in a configurable directory for downstream processing or artifact storage.
+  </Card>
+  <Card title="Cross-platform" icon="display">
+    Compatible with Ubuntu, macOS, and Windows runners. Supports GitHub-hosted runners, self-hosted runners, and GitHub Enterprise Server.
+  </Card>
+  <Card title="Easy debugging" icon="bug">
+    Provides clear, structured output that makes it straightforward to inspect exactly what changed and why a step did or did not run.
+  </Card>
+</CardGroup>
+
+## Supported events
+
+`changed-files` works with a wide range of GitHub Actions trigger events:
+
+- `pull_request` and `pull_request_target` — compares the PR branch against the base branch
+- `push` — compares the current commit against the preceding remote commit
+- `merge_group` — supports merge queue workflows
+- `release` — detects changes relative to the previous release tag
+- `schedule`, `workflow_dispatch`, `workflow_run`, `issue_comment`, and more
+
+<Note>
+  GitHub's REST API is only available for `pull_request` events. For `push` and all other events, the action uses the local `.git` directory, which requires `actions/checkout` to be present in your workflow.
+</Note>
+
+## Supported platforms
+
+The action runs on all GitHub Actions runner operating systems:
+
+- **Ubuntu** (recommended for most workflows)
+- **macOS**
+- **Windows** (use `use_posix_path_separator: true` for consistent path formatting)
+
+It supports **GitHub-hosted runners**, **self-hosted runners**, and **GitHub Enterprise Server**.
+
+## File change type acronyms
+
+Each file in a changed-files output is classified by Git's diff status letter. These acronyms appear throughout this documentation and in output names like `added_files` or `type_changed_files`.
+
+| Acronym | Meaning      |
+|:-------:|:-------------|
+| A       | Added        |
+| C       | Copied       |
+| M       | Modified     |
+| D       | Deleted      |
+| R       | Renamed      |
+| T       | Type changed |
+| U       | Unmerged     |
+| X       | Unknown      |
+
+The `all_changed_files` output combines ACMR (all except deleted, type-changed, unmerged, and unknown). The `all_modified_files` output combines ACMRD. The `all_changed_and_modified_files` output combines all categories (ACMRDTUX).

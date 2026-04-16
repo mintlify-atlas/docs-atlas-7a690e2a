@@ -1,0 +1,167 @@
+---
+title: "Group file patterns by name using the files_yaml input"
+description: "Use the files_yaml input to define named pattern groups and get per-group changed-files outputs like test_any_changed or doc_all_changed_files."
+---
+
+The `files_yaml` input lets you define multiple named pattern groups in a single action step. Instead of running the action once per group of files, you declare all groups together and the action produces a separate set of outputs for each key. This reduces the number of steps in your workflow and keeps related patterns co-located.
+
+## YAML syntax
+
+Each key in the `files_yaml` block maps to an array of glob patterns. The patterns follow the same syntax as the `files` input — globstar, brace expansion, and negation are all supported.
+
+```yaml
+- name: Get all test, doc and src files that have changed
+  id: changed-files-yaml
+  uses: tj-actions/changed-files@v47
+  with:
+    files_yaml: |
+      doc:
+        - '**.md'
+        - docs/**
+      test:
+        - test/**
+        - '!test/**.md'
+      src:
+        - src/**
+```
+
+<Warning>
+All keys must start with a letter or `_` and contain only alphanumeric characters, `-`, or `_`. Valid examples: `test`, `test_key`, `test-key`, `_test_key`. Invalid keys will cause the action to fail.
+</Warning>
+
+## Per-key outputs
+
+Every standard output is available for each key, prefixed with the key name and an underscore. For a key named `test`, you can access `test_any_changed`, `test_all_changed_files`, `test_added_files`, and so on.
+
+```yaml
+- name: Run step if test file(s) change
+  if: steps.changed-files-yaml.outputs.test_any_changed == 'true'
+  env:
+    TEST_ALL_CHANGED_FILES: ${{ steps.changed-files-yaml.outputs.test_all_changed_files }}
+  run: |
+    echo "One or more test file(s) has changed."
+    echo "List all the files that have changed: $TEST_ALL_CHANGED_FILES"
+
+- name: Run step if doc file(s) change
+  if: steps.changed-files-yaml.outputs.doc_any_changed == 'true'
+  env:
+    DOC_ALL_CHANGED_FILES: ${{ steps.changed-files-yaml.outputs.doc_all_changed_files }}
+  run: |
+    echo "One or more doc file(s) has changed."
+    echo "List all the files that have changed: $DOC_ALL_CHANGED_FILES"
+```
+
+## `modified_keys` and `changed_keys` outputs
+
+When using `files_yaml`, two additional global outputs are available:
+
+- **`modified_keys`** — a space-separated list of keys where at least one file was added, copied, modified, renamed, or deleted (ACMRD).
+- **`changed_keys`** — a space-separated list of keys where at least one file was added, copied, modified, or renamed (ACMR). Deleted files are not included.
+
+These outputs make it easy to build conditional logic without checking each key individually:
+
+```yaml
+- name: Print which groups changed
+  env:
+    CHANGED_KEYS: ${{ steps.changed-files-yaml.outputs.changed_keys }}
+  run: |
+    echo "The following groups changed: $CHANGED_KEYS"
+```
+
+## Loading YAML from a file
+
+For patterns shared across workflows, store the YAML in a file and reference it with `files_yaml_from_source_file`. This avoids duplicating the same group definitions in every workflow.
+
+```yaml
+- name: Get changed files from YAML source file
+  id: changed-files-yaml
+  uses: tj-actions/changed-files@v47
+  with:
+    files_yaml_from_source_file: .github/changed-files.yml
+```
+
+A corresponding `.github/changed-files.yml` file might look like:
+
+```yaml
+test:
+  - test/**.txt
+src:
+  - src/*.ts
+  - '!src/__tests__/**'
+dist:
+  - dist/**
+shared: &shared
+  - .github/**
+common:
+  - *shared
+  - .gitignore
+multiline: |
+  test/**
+  src/*.ts
+  .github/**
+```
+
+<Tip>
+YAML anchors and aliases are supported. Use `&anchor` to define a reusable pattern list and `*anchor` to reference it in other keys, as shown with `shared` and `common` above.
+</Tip>
+
+## Ignoring files per group with `files_ignore_yaml`
+
+The `files_ignore_yaml` input mirrors `files_yaml` but specifies patterns to exclude from change detection. It follows the same key naming rules and also supports loading from a file via `files_ignore_yaml_from_source_file`.
+
+```yaml
+- name: Get changed files with per-group ignores
+  id: changed-files-yaml
+  uses: tj-actions/changed-files@v47
+  with:
+    files_yaml: |
+      src:
+        - src/**
+    files_ignore_yaml: |
+      src:
+        - src/**/__tests__/**
+        - src/**/*.test.ts
+```
+
+<Tabs>
+  <Tab title="Inline YAML">
+    ```yaml
+    - name: Get changed files
+      id: changed-files-yaml
+      uses: tj-actions/changed-files@v47
+      with:
+        files_yaml: |
+          doc:
+            - '**.md'
+            - docs/**
+          test:
+            - test/**
+    ```
+  </Tab>
+  <Tab title="From source file">
+    ```yaml
+    - name: Get changed files from YAML file
+      id: changed-files-yaml
+      uses: tj-actions/changed-files@v47
+      with:
+        files_yaml_from_source_file: .github/changed-files.yml
+    ```
+  </Tab>
+</Tabs>
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="File filtering" icon="filter" href="/guides/file-filtering">
+    Use glob patterns with the files and files_ignore inputs.
+  </Card>
+  <Card title="Monorepos" icon="boxes-stacked" href="/guides/monorepos">
+    Apply YAML pattern groups to detect changes per package.
+  </Card>
+  <Card title="Outputs reference" icon="arrow-up-right" href="/reference/outputs">
+    Full list of available outputs including per-key variants.
+  </Card>
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Full reference for all available inputs.
+  </Card>
+</CardGroup>

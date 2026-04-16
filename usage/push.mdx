@@ -1,0 +1,101 @@
+---
+title: "Using changed-files on push events"
+description: "Detect files changed since the last remote commit on push events. Covers fetch-depth requirements, default behavior, and how to loop over changed files."
+---
+
+On `push` events, `changed-files` compares the preceding remote commit on the branch against the current commit. This gives you a precise list of every file introduced by the push — useful for triggering downstream jobs like linting, testing, or deployment only when relevant files are touched.
+
+<Warning>
+You must set `fetch-depth: 0` or `fetch-depth: 2` in `actions/checkout` for push events. The default `fetch-depth: 1` produces a shallow clone with only the latest commit, which means there is no preceding commit to compare against and the diff will fail or return unexpected results.
+
+- `fetch-depth: 0` fetches the full history (required for comparing across many commits or tags).
+- `fetch-depth: 2` fetches only the two most recent commits, which is sufficient for comparing a single push.
+</Warning>
+
+<Note>
+GitHub's REST API is **not** supported for `push` events. You must use the local `.git` directory method, which requires `actions/checkout`.
+</Note>
+
+## Basic push workflow
+
+The following workflow runs on every push to `main`, checks out the repository with enough history to compute the diff, and lists all changed files.
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # -------------------------------------------------------------
+  # Using GitHub's API is not supported for push events
+  # -------------------------------------------------------------
+  #
+  # ----------------------------------------------------------------------------------------------
+  # Using local .git history
+  # ----------------------------------------------------------------------------------------------
+  # Event `push`: Compare the preceding remote commit -> to the current commit of the main branch
+  # ----------------------------------------------------------------------------------------------
+  changed_files:
+    runs-on: ubuntu-latest  # windows-latest || macos-latest
+    name: Test changed-files
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # OR "2" -> To retrieve the preceding commit.
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+      # NOTE: `since_last_remote_commit: true` is implied by default and falls back to the previous local commit.
+
+      - name: List all changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+```
+
+## Default comparison behavior
+
+For push events, `since_last_remote_commit: true` is implied by default. The action uses the preceding remote commit as the base and compares it to the current HEAD. If no remote commit is found (for example, on the very first push to a branch), the action falls back to the previous local commit.
+
+This means you do not need to explicitly set `since_last_remote_commit: true` in push workflows — it is already the default behavior.
+
+## Listing changed files in a loop
+
+You can iterate over the changed files using any standard shell loop. The `all_changed_files` output is a space-separated string by default:
+
+```yaml
+- name: List all changed files
+  env:
+    ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+  run: |
+    for file in ${ALL_CHANGED_FILES}; do
+      echo "$file was changed"
+    done
+```
+
+<Tip>
+If any of your file names contain spaces, use a custom `separator` input (such as a newline or comma) and adjust how you split the output in your shell script. See the [inputs reference](/reference/inputs) for details on the `separator` input.
+</Tip>
+
+## How `fetch-depth` affects the diff
+
+<Steps>
+  <Step title="fetch-depth: 1 (default — do not use for push events)">
+    Only the latest commit is fetched. There is no preceding commit available to diff against, so the action cannot determine what changed.
+  </Step>
+  <Step title="fetch-depth: 2">
+    Fetches the current commit and one parent. This is the minimum needed to compare the latest push against the previous commit. Use this when you only need to see what changed in the most recent push.
+  </Step>
+  <Step title="fetch-depth: 0">
+    Fetches the full commit history. Required when you need to compare across multiple commits, branches, or tags, or when using `base_sha` / `sha` inputs to specify a custom comparison range.
+  </Step>
+</Steps>
+
+See [inputs](/reference/inputs) for more options including `sha`, `base_sha`, `since`, and `until` to customize the comparison range.

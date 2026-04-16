@@ -1,0 +1,282 @@
+---
+title: "Inputs Reference for tj-actions/changed-files"
+description: "Every input the changed-files action accepts, grouped by function: file patterns, comparison range, output format, performance, auth, and error handling."
+---
+
+The `tj-actions/changed-files` action accepts a wide range of inputs that control how file changes are detected, filtered, and reported. All inputs are optional. The sections below group them by purpose to help you find what you need quickly.
+
+## File pattern inputs
+
+These inputs define which files and directories to include or exclude from change detection. Multiline patterns should not be quoted in YAML — the value is already a newline-separated string.
+
+<ParamField path="files" type="string" default="">
+  File and directory patterns used to detect changes. Defaults to the entire repository if unset. Multiline patterns should not include quotes.
+</ParamField>
+
+<ParamField path="files_separator" type="string" default="\n">
+  Separator used to split the `files` input.
+</ParamField>
+
+<ParamField path="files_from_source_file" type="string" default="">
+  Source file(s) used to populate the `files` input.
+</ParamField>
+
+<ParamField path="files_from_source_file_separator" type="string" default="\n">
+  Separator used to split the `files_from_source_file` input.
+</ParamField>
+
+<ParamField path="files_yaml" type="string" default="">
+  YAML used to define a set of named file pattern groups to detect changes. Each top-level key becomes a prefix for all related outputs.
+</ParamField>
+
+<ParamField path="files_yaml_from_source_file" type="string" default="">
+  Source file(s) used to populate the `files_yaml` input.
+</ParamField>
+
+<ParamField path="files_yaml_from_source_file_separator" type="string" default="\n">
+  Separator used to split the `files_yaml_from_source_file` input.
+</ParamField>
+
+<ParamField path="files_ignore" type="string" default="">
+  Ignore changes to these file(s). Multiline patterns should not include quotes.
+</ParamField>
+
+<ParamField path="files_ignore_separator" type="string" default="\n">
+  Separator used to split the `files_ignore` input.
+</ParamField>
+
+<ParamField path="files_ignore_from_source_file" type="string" default="">
+  Source file(s) used to populate the `files_ignore` input.
+</ParamField>
+
+<ParamField path="files_ignore_from_source_file_separator" type="string" default="\n">
+  Separator used to split the `files_ignore_from_source_file` input.
+</ParamField>
+
+<ParamField path="files_ignore_yaml" type="string" default="">
+  YAML used to define a set of file patterns to ignore changes.
+</ParamField>
+
+<ParamField path="files_ignore_yaml_from_source_file" type="string" default="">
+  Source file(s) used to populate the `files_ignore_yaml` input.
+</ParamField>
+
+<ParamField path="files_ignore_yaml_from_source_file_separator" type="string" default="\n">
+  Separator used to split the `files_ignore_yaml_from_source_file` input.
+</ParamField>
+
+## Comparison inputs
+
+These inputs determine the commit range used to calculate which files have changed.
+
+<ParamField path="sha" type="string">
+  Specify a different commit SHA or branch used for comparing changes.
+</ParamField>
+
+<ParamField path="base_sha" type="string">
+  Specify a different base commit SHA or branch used for comparing changes.
+</ParamField>
+
+<ParamField path="since" type="string" default="">
+  Get changed files for commits whose timestamp is older than the given time.
+</ParamField>
+
+<ParamField path="until" type="string" default="">
+  Get changed files for commits whose timestamp is earlier than the given time.
+</ParamField>
+
+<ParamField path="since_last_remote_commit" type="boolean" default="false">
+  Use the last commit on the remote branch as the `base_sha`. Defaults to the last non-merge commit on the target branch for pull request events and the previous remote commit of the current branch for push events.
+</ParamField>
+
+<ParamField path="path" type="string" default=".">
+  Specify a relative path under `$GITHUB_WORKSPACE` to locate the repository.
+</ParamField>
+
+<ParamField path="diff_relative" type="boolean" default="true">
+  Exclude changes outside the current directory and show path names relative to it. Requires the top-level directory to be specified via the `path` input.
+</ParamField>
+
+## Output format inputs
+
+These inputs control the structure, encoding, and content of the action's outputs.
+
+<ParamField path="separator" type="string" default=" ">
+  Split character for output strings.
+</ParamField>
+
+<ParamField path="old_new_separator" type="string" default=",">
+  Split character for old and new filename pairs.
+</ParamField>
+
+<ParamField path="old_new_files_separator" type="string" default=" ">
+  Split character for old and new renamed filename pairs.
+</ParamField>
+
+<ParamField path="include_all_old_new_renamed_files" type="boolean" default="false">
+  Include the `all_old_new_renamed_files` output. Note that this can generate a large output.
+</ParamField>
+
+<ParamField path="json" type="boolean" default="false">
+  Output the list of changed files as a JSON-formatted string, which can be used for matrix jobs.
+</ParamField>
+
+<ParamField path="escape_json" type="boolean" default="true">
+  Escape JSON output.
+</ParamField>
+
+<ParamField path="matrix" type="boolean" default="false">
+  Output changed files in a format suitable for matrix jobs. This is an alias for setting `json` to `true` and `escape_json` to `false`.
+</ParamField>
+
+<ParamField path="safe_output" type="boolean" default="true">
+  Apply sanitization to output filenames before they are set as output. Set to `false` only when storing output in environment variables rather than using it directly in expressions.
+</ParamField>
+
+<ParamField path="dir_names" type="boolean" default="false">
+  Output unique changed directories instead of filenames. Returns `.` for changed files located in the current working directory (defaults to `$GITHUB_WORKSPACE`).
+</ParamField>
+
+<ParamField path="dir_names_max_depth" type="string">
+  Limit the directory output to a maximum depth. For example, `test/test1/test2` with a max depth of `2` returns `test/test1`.
+</ParamField>
+
+<ParamField path="dir_names_exclude_current_dir" type="boolean" default="false">
+  Exclude the current directory represented by `.` from the output when `dir_names` is set to `true`.
+</ParamField>
+
+<ParamField path="dir_names_include_files" type="string" default="">
+  File and directory patterns to include in the output when `dir_names` is set to `true`. Returns only the matching files alongside directory names.
+</ParamField>
+
+<ParamField path="dir_names_include_files_separator" type="string" default="\n">
+  Separator used to split the `dir_names_include_files` input.
+</ParamField>
+
+<ParamField path="dir_names_deleted_files_include_only_deleted_dirs" type="boolean" default="false">
+  Include only directories that have been deleted (rather than directory names of files that were deleted) in the `deleted_files` output when `dir_names` is set to `true`.
+</ParamField>
+
+<ParamField path="output_renamed_files_as_deleted_and_added" type="boolean" default="false">
+  Output renamed files as deleted and added files.
+</ParamField>
+
+<ParamField path="write_output_files" type="boolean" default="false">
+  Write outputs to the `output_dir` folder. Creates a `.txt` file by default and a `.json` file when `json` is set to `true`.
+</ParamField>
+
+<ParamField path="output_dir" type="string" default=".github/outputs">
+  Directory to store output files.
+</ParamField>
+
+## Performance inputs
+
+These inputs tune how much Git history is fetched and whether certain expensive operations are skipped.
+
+<ParamField path="fetch_depth" type="string" default="25">
+  Depth of additional branch history fetched. Adjust this to resolve errors caused by insufficient history.
+</ParamField>
+
+<ParamField path="skip_initial_fetch" type="boolean" default="false">
+  Skip the initial fetch of additional history to improve performance for shallow repositories. This may cause errors with missing history. Use only when you have already fetched all history needed for the diff.
+</ParamField>
+
+<ParamField path="fetch_additional_submodule_history" type="boolean" default="false">
+  Fetch additional history for submodules.
+</ParamField>
+
+<ParamField path="fetch_missing_history_max_retries" type="string" default="20">
+  Maximum number of retries when fetching missing history.
+</ParamField>
+
+<ParamField path="negation_patterns_first" type="boolean" default="false">
+  Apply negation patterns first. This affects how changed files are matched against the provided patterns.
+</ParamField>
+
+## API and auth inputs
+
+These inputs configure how the action authenticates and whether it uses the GitHub REST API or the local Git repository.
+
+<ParamField path="token" type="string" default="${{ github.token }}">
+  GitHub token used to fetch changed files from GitHub's API.
+</ParamField>
+
+<ParamField path="api_url" type="string" default="${{ github.api_url }}">
+  GitHub API URL.
+</ParamField>
+
+<ParamField path="use_rest_api" type="boolean" default="false">
+  Force the use of GitHub's REST API even when a local copy of the repository exists. Only supported for `pull_request*` events.
+</ParamField>
+
+## Error handling inputs
+
+These inputs control how the action responds to diff errors and identical SHAs.
+
+<ParamField path="fail_on_initial_diff_error" type="boolean" default="false">
+  Fail when the initial diff fails.
+</ParamField>
+
+<ParamField path="fail_on_submodule_diff_error" type="boolean" default="false">
+  Fail when the submodule diff fails.
+</ParamField>
+
+<ParamField path="skip_same_sha" type="boolean" default="false">
+  Do not fail when the base and head SHAs are identical.
+</ParamField>
+
+## Filtering inputs
+
+These inputs further narrow which files are considered, based on path format, tags, and file type.
+
+<ParamField path="exclude_submodules" type="boolean" default="false">
+  Exclude changes to submodules.
+</ParamField>
+
+<ParamField path="exclude_symlinks" type="boolean" default="false">
+  Exclude symlinks from changed files.
+</ParamField>
+
+<ParamField path="quotepath" type="boolean" default="true">
+  Use non-ASCII characters to match files and output filenames completely verbatim by setting this to `false`.
+</ParamField>
+
+<ParamField path="use_posix_path_separator" type="boolean" default="false">
+  Use the POSIX path separator `/` for output file paths on Windows.
+</ParamField>
+
+<ParamField path="tags_pattern" type="string" default="*">
+  Tags pattern to include.
+</ParamField>
+
+<ParamField path="tags_ignore_pattern" type="string" default="">
+  Tags pattern to ignore.
+</ParamField>
+
+## Recovery inputs
+
+These inputs control the recovery of deleted files to their original or a new location.
+
+<ParamField path="recover_deleted_files" type="boolean" default="false">
+  Recover deleted files.
+</ParamField>
+
+<ParamField path="recover_deleted_files_to_destination" type="string" default="">
+  Recover deleted files to a new destination directory. Defaults to the original location if unset.
+</ParamField>
+
+<ParamField path="recover_files" type="string" default="">
+  File and directory patterns used to recover deleted files. Defaults to the patterns provided via `files`, `files_from_source_file`, `files_ignore`, and `files_ignore_from_source_file`, or all deleted files if no patterns are provided.
+</ParamField>
+
+<ParamField path="recover_files_separator" type="string" default="\n">
+  Separator used to split the `recover_files` input.
+</ParamField>
+
+<ParamField path="recover_files_ignore" type="string" default="">
+  File and directory patterns to ignore when recovering deleted files.
+</ParamField>
+
+<ParamField path="recover_files_ignore_separator" type="string" default="\n">
+  Separator used to split the `recover_files_ignore` input.
+</ParamField>

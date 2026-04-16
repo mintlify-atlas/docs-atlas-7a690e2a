@@ -1,0 +1,160 @@
+---
+title: "Detect per-package changes in a monorepo with changed-files"
+description: "Detect which packages changed in a monorepo and run only the relevant CI jobs using files_yaml, dir_names, and conditional job execution."
+---
+
+Monorepos host multiple packages or services in a single repository. Running CI for every package on every pull request wastes time and resources. The `changed-files` action gives you several tools to detect which packages were affected by a change and skip everything else.
+
+## Strategy overview
+
+There are two main approaches to per-package change detection in a monorepo:
+
+1. **`files_yaml` with named groups** — define one key per package and get a boolean output (`frontend_any_changed`, `backend_any_changed`) that you can use in job `if` conditions.
+2. **`dir_names: true` with depth limiting** — let the action derive which top-level directories changed automatically, without enumerating every package by name.
+
+Both approaches can be used together.
+
+## Approach 1: Named groups with `files_yaml`
+
+Define a key for each package in the `files_yaml` input. The action produces `<key>_any_changed` outputs you can reference in downstream job `if` conditions.
+
+```yaml
+name: Monorepo CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.changed-files.outputs.frontend_any_changed }}
+      backend_changed: ${{ steps.changed-files.outputs.backend_any_changed }}
+      shared_changed: ${{ steps.changed-files.outputs.shared_any_changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed packages
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          files_yaml: |
+            frontend:
+              - frontend/**
+            backend:
+              - backend/**
+            shared:
+              - packages/shared/**
+
+  test-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test frontend
+        run: npm test --workspace=frontend
+
+  test-backend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test backend
+        run: npm test --workspace=backend
+```
+
+<Tip>
+Export the per-package booleans as job-level `outputs` from the detection job so that downstream jobs can reference them with `needs.<job>.outputs.<key>`. Step outputs are not directly accessible across jobs.
+</Tip>
+
+## Approach 2: Automatic directory detection with `dir_names`
+
+If your monorepo has many packages, listing them individually in `files_yaml` can be tedious. Set `dir_names: true` and `dir_names_max_depth: 1` to let the action automatically report which top-level directories changed.
+
+```yaml
+name: Detect changed packages
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.changed-dirs.outputs.all_changed_files }}
+      any_changed: ${{ steps.changed-dirs.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed top-level packages
+        id: changed-dirs
+        uses: tj-actions/changed-files@v47
+        with:
+          dir_names: "true"
+          dir_names_max_depth: "1"
+          dir_names_exclude_current_dir: "true"
+          matrix: true
+
+  build-packages:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: ${{ fromJSON(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.package }}
+        run: |
+          echo "Building package: ${{ matrix.package }}"
+```
+
+## Using the `path` input for non-root repositories
+
+If your repository is checked out into a subdirectory (for example, when using multiple `actions/checkout` steps), use the `path` input to point the action at the correct location. All output paths are relative to that directory when `diff_relative` is enabled (the default).
+
+```yaml
+- name: Checkout into dir1
+  uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+    path: dir1
+
+- name: Run changed-files in dir1
+  id: changed-files-for-dir1
+  uses: tj-actions/changed-files@v47
+  with:
+    path: dir1
+```
+
+## Relative paths and `diff_relative`
+
+`diff_relative` defaults to `true`, which means all output paths are relative to the directory specified by `path`. If you set `path` to a subdirectory, file paths in the output will be relative to that subdirectory rather than the repository root.
+
+<Note>
+`diff_relative: true` requires you to set the `path` input to the top-level directory you want paths relative to. If `path` is not set, it defaults to `.` (the workspace root).
+</Note>
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="YAML patterns" icon="file-code" href="/guides/yaml-patterns">
+    Define named pattern groups for per-package output.
+  </Card>
+  <Card title="Directory changes" icon="folder" href="/guides/directory-changes">
+    Automatically detect changed top-level directories.
+  </Card>
+  <Card title="Matrix jobs" icon="grid-2x2" href="/guides/matrix-jobs">
+    Fan out one job per changed package using matrix strategy.
+  </Card>
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Full reference for path, diff_relative, and dir_names inputs.
+  </Card>
+</CardGroup>

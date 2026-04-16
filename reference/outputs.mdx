@@ -1,0 +1,207 @@
+---
+title: "Outputs Reference for tj-actions/changed-files"
+description: "Complete reference for all outputs produced by the changed-files GitHub Action, including file lists, counts, boolean flags, and YAML key outputs."
+---
+
+The `tj-actions/changed-files` action produces a rich set of outputs after each run. Outputs are grouped below by what they represent: per-type file lists with counts, combined aggregates, boolean flags, and special outputs for YAML-based pattern matching.
+
+## File type acronyms
+
+Each output description uses single-letter codes to indicate which Git diff status types are included.
+
+| Acronym | Meaning      |
+|:-------:|:------------:|
+| A       | Added        |
+| C       | Copied       |
+| M       | Modified     |
+| D       | Deleted      |
+| R       | Renamed      |
+| T       | Type changed |
+| U       | Unmerged     |
+| X       | Unknown      |
+
+## Per-type file lists
+
+These outputs return files that match a specific Git diff status. Each has a corresponding `*_count` output that returns the number of files in that list.
+
+<ResponseField name="added_files" type="string">
+  Returns only files that are Added (A).
+</ResponseField>
+
+<ResponseField name="added_files_count" type="string">
+  Returns the number of `added_files`.
+</ResponseField>
+
+<ResponseField name="copied_files" type="string">
+  Returns only files that are Copied (C).
+</ResponseField>
+
+<ResponseField name="copied_files_count" type="string">
+  Returns the number of `copied_files`.
+</ResponseField>
+
+<ResponseField name="modified_files" type="string">
+  Returns only files that are Modified (M).
+</ResponseField>
+
+<ResponseField name="modified_files_count" type="string">
+  Returns the number of `modified_files`.
+</ResponseField>
+
+<ResponseField name="deleted_files" type="string">
+  Returns only files that are Deleted (D).
+</ResponseField>
+
+<ResponseField name="deleted_files_count" type="string">
+  Returns the number of `deleted_files`.
+</ResponseField>
+
+<ResponseField name="renamed_files" type="string">
+  Returns only files that are Renamed (R).
+</ResponseField>
+
+<ResponseField name="renamed_files_count" type="string">
+  Returns the number of `renamed_files`.
+</ResponseField>
+
+<ResponseField name="type_changed_files" type="string">
+  Returns only files that have had their file type changed (T).
+</ResponseField>
+
+<ResponseField name="type_changed_files_count" type="string">
+  Returns the number of `type_changed_files`.
+</ResponseField>
+
+<ResponseField name="unmerged_files" type="string">
+  Returns only files that are Unmerged (U).
+</ResponseField>
+
+<ResponseField name="unmerged_files_count" type="string">
+  Returns the number of `unmerged_files`.
+</ResponseField>
+
+<ResponseField name="unknown_files" type="string">
+  Returns only files that are Unknown (X).
+</ResponseField>
+
+<ResponseField name="unknown_files_count" type="string">
+  Returns the number of `unknown_files`.
+</ResponseField>
+
+## Combined file lists
+
+These outputs aggregate files across multiple status types for common use cases.
+
+<ResponseField name="all_changed_files" type="string">
+  Returns all changed files — a combination of all added, copied, modified, and renamed files (ACMR).
+</ResponseField>
+
+<ResponseField name="all_changed_files_count" type="string">
+  Returns the number of `all_changed_files`.
+</ResponseField>
+
+<ResponseField name="all_modified_files" type="string">
+  Returns all changed files — a combination of all added, copied, modified, renamed, and deleted files (ACMRD).
+</ResponseField>
+
+<ResponseField name="all_modified_files_count" type="string">
+  Returns the number of `all_modified_files`.
+</ResponseField>
+
+<ResponseField name="all_changed_and_modified_files" type="string">
+  Returns all changed and modified files — a combination of all status types (ACMRDTUX).
+</ResponseField>
+
+<ResponseField name="all_changed_and_modified_files_count" type="string">
+  Returns the number of `all_changed_and_modified_files`.
+</ResponseField>
+
+## Boolean flags
+
+These outputs return `"true"` or `"false"` based on whether the files matched by the `files*` or `files_ignore*` inputs have changed in a specific way.
+
+<ResponseField name="any_changed" type="string">
+  Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have changed. Defaults to `true` when no patterns are specified. Includes a combination of all added, copied, modified, and renamed files (ACMR).
+</ResponseField>
+
+<ResponseField name="only_changed" type="string">
+  Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have changed. Includes a combination of all added, copied, modified, and renamed files (ACMR).
+</ResponseField>
+
+<ResponseField name="any_modified" type="string">
+  Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been modified. Defaults to `true` when no patterns are specified. Includes a combination of all added, copied, modified, renamed, and deleted files (ACMRD).
+</ResponseField>
+
+<ResponseField name="only_modified" type="string">
+  Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have been modified (ACMRD).
+</ResponseField>
+
+<ResponseField name="any_deleted" type="string">
+  Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been deleted. Defaults to `true` when no patterns are specified (D).
+</ResponseField>
+
+<ResponseField name="only_deleted" type="string">
+  Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have been deleted (D).
+</ResponseField>
+
+<ResponseField name="any_added" type="string">
+  Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been added.
+</ResponseField>
+
+## Other changed files
+
+These outputs return files that were changed but do **not** match the patterns provided in the `files*` or `files_ignore*` inputs — the complement of the matched set.
+
+<ResponseField name="other_changed_files" type="string">
+  Returns all other changed files not listed in the files input — a combination of all added, copied, modified, and renamed files (ACMR).
+</ResponseField>
+
+<ResponseField name="other_changed_files_count" type="string">
+  Returns the number of `other_changed_files`.
+</ResponseField>
+
+<ResponseField name="other_modified_files" type="string">
+  Returns all other modified files not listed in the files input — a combination of all added, copied, modified, and deleted files (ACMRD).
+</ResponseField>
+
+<ResponseField name="other_modified_files_count" type="string">
+  Returns the number of `other_modified_files`.
+</ResponseField>
+
+<ResponseField name="other_deleted_files" type="string">
+  Returns all other deleted files not listed in the files input — a combination of all deleted files (D).
+</ResponseField>
+
+<ResponseField name="other_deleted_files_count" type="string">
+  Returns the number of `other_deleted_files`.
+</ResponseField>
+
+## Renamed files with old and new names
+
+<Note>
+  The `all_old_new_renamed_files` output requires setting the `include_all_old_new_renamed_files` input to `true`. It is a global output and will not be nested under a key prefix when using `files_yaml*` inputs.
+</Note>
+
+<ResponseField name="all_old_new_renamed_files" type="string">
+  Returns only files that are Renamed and lists their old and new names (R). Each pair is separated by `old_new_separator` and pairs are separated by `old_new_files_separator`.
+</ResponseField>
+
+<ResponseField name="all_old_new_renamed_files_count" type="string">
+  Returns the number of `all_old_new_renamed_files`.
+</ResponseField>
+
+## YAML key outputs
+
+These outputs are only populated when the `files_yaml` or `files_yaml_from_source_file` inputs are used. They report which named pattern groups contain changed files.
+
+<ResponseField name="modified_keys" type="string">
+  Returns all modified YAML keys when `files_yaml` is used — keys that contain any path that has been added, copied, modified, or deleted (ACMRD).
+</ResponseField>
+
+<ResponseField name="changed_keys" type="string">
+  Returns all changed YAML keys when `files_yaml` is used — keys that contain any path that has been added, copied, modified, or renamed (ACMR).
+</ResponseField>
+
+<Note>
+  When using `files_yaml*` inputs, all standard outputs are prefixed with the YAML key name. For example, if your YAML defines a key named `test`, you access its outputs as `test_added_files`, `test_any_changed`, `test_all_changed_files`, and so on. Keys must start with a letter or `_` and may contain only alphanumeric characters, `-`, or `_`.
+</Note>

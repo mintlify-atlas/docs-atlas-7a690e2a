@@ -1,0 +1,188 @@
+---
+title: "Filter changed files using glob patterns and ignore rules"
+description: "Learn how to use the files, files_ignore, and source file inputs to scope change detection to exactly the file paths you care about."
+---
+
+The `files` and `files_ignore` inputs let you narrow change detection to a specific subset of your repository. When `files` is not set, the action reports every changed file in the repository. Once you provide at least one pattern, only files that match are counted in the `any_changed`, `only_changed`, and `all_changed_files` outputs.
+
+## Glob pattern syntax
+
+The action uses GitHub's native workflow glob pattern matching. The table below shows the supported syntax.
+
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| `*` | Matches any characters except `/` | `*.md` matches all markdown files in the current directory |
+| `**` | Matches any characters including `/` (globstar) | `**.md` matches markdown files at any depth |
+| `{a,b}` | Brace expansion — matches either alternative | `*.{js,ts}` matches `.js` or `.ts` files |
+| `!` | Negation — excludes matching files | `!test/**` excludes the test directory |
+
+<Warning>
+Globstar (`**`) is required to match files in subdirectories. The pattern `docs/**` matches any file or folder inside `docs/`, while `docs/*` only matches one level deep.
+</Warning>
+
+## The `files` input
+
+Use `files` to specify one or more glob patterns. List each pattern on its own line using a YAML multiline string. Do not add quotes around individual patterns.
+
+```yaml
+- name: Get changed markdown files
+  id: changed-markdown-files
+  uses: tj-actions/changed-files@v47
+  with:
+    files: |
+      **.md
+      docs/**.md
+```
+
+<Note>
+Do not wrap multiline patterns in single or double quotes. The value is already a newline-separated string, and quoting it will cause pattern matching to fail.
+</Note>
+
+### Match a list of file types
+
+```yaml
+- name: Get changed files
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    files: |
+      my-file.txt
+      *.sh
+      *.png
+      !*.md
+      test_directory/**
+      **/*.sql
+```
+
+The `!*.md` line is a negation pattern — any file that would otherwise match but also matches `*.md` is excluded from results.
+
+### Match files in a specific folder
+
+```yaml
+- name: Get changed files in the docs folder
+  id: changed-files-specific
+  uses: tj-actions/changed-files@v47
+  with:
+    files: docs/*.{js,html}
+```
+
+## The `files_ignore` input
+
+`files_ignore` excludes patterns from the result set regardless of what `files` matches. It is useful when you want to include a broad directory but exclude one or more subdirectories or file types.
+
+```yaml
+- name: Get changed docs files, excluding static assets
+  id: changed-files-specific
+  uses: tj-actions/changed-files@v47
+  with:
+    files: docs/*.{js,html}
+    files_ignore: docs/static.js
+```
+
+## Loading patterns from a file
+
+For patterns that are shared across multiple workflows, store them in a text file and reference it with `files_from_source_file`. Each line in the file is treated as a separate pattern.
+
+```yaml
+- name: Get changed files using a source file
+  id: changed-files-specific-source-file
+  uses: tj-actions/changed-files@v47
+  with:
+    files_from_source_file: test/changed-files-list.txt
+```
+
+You can combine `files_from_source_file` with `files` to add extra patterns at the workflow level:
+
+```yaml
+- name: Get changed files from file and inline patterns
+  id: changed-files-specific-source-file-and-specify-files
+  uses: tj-actions/changed-files@v47
+  with:
+    files_from_source_file: |
+      test/changed-files-list.txt
+    files: |
+      test.txt
+```
+
+### `files_ignore_from_source_file`
+
+The same technique applies to ignore patterns. Store your exclusion list in a file and reference it:
+
+```yaml
+- name: Get changed files with ignores from file
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    files: src/**
+    files_ignore_from_source_file: .github/ignore-patterns.txt
+```
+
+## Using the `separator` input
+
+By default, file paths in the output are space-separated. Change this with the `separator` input to make downstream processing easier.
+
+```yaml
+- name: Get all changed files with comma separator
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    separator: ","
+```
+
+## Using outputs together
+
+The `any_changed`, `only_changed`, and `all_changed_files` outputs work together to let you conditionally run steps and iterate over matched files.
+
+```yaml
+- name: Get changed files
+  id: changed-files-specific
+  uses: tj-actions/changed-files@v47
+  with:
+    files: |
+      my-file.txt
+      *.sh
+      *.png
+      !*.md
+      test_directory/**
+      **/*.sql
+
+- name: Run step if any of the listed files above change
+  if: steps.changed-files-specific.outputs.any_changed == 'true'
+  run: |
+    echo "One or more files listed above has changed."
+
+- name: Run step if only the files listed above change
+  if: steps.changed-files-specific.outputs.only_changed == 'true'
+  run: |
+    echo "Only files listed above have changed."
+
+- name: Run step if any of the listed files above is deleted
+  if: steps.changed-files-specific.outputs.any_deleted == 'true'
+  env:
+    DELETED_FILES: ${{ steps.changed-files-specific.outputs.deleted_files }}
+  run: |
+    for file in ${DELETED_FILES}; do
+      echo "$file was deleted"
+    done
+```
+
+<Tip>
+Use `only_changed` to run a step exclusively when a focused set of files changed and nothing else. This is useful for triggering narrow linting or testing steps without running them on every PR.
+</Tip>
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="YAML patterns" icon="file-code" href="/guides/yaml-patterns">
+    Group multiple pattern sets under named keys for more granular output.
+  </Card>
+  <Card title="Directory changes" icon="folder" href="/guides/directory-changes">
+    Output directory names instead of individual file paths.
+  </Card>
+  <Card title="Monorepos" icon="boxes-stacked" href="/guides/monorepos">
+    Scope change detection to individual packages in a monorepo.
+  </Card>
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Full reference for all available inputs.
+  </Card>
+</CardGroup>

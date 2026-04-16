@@ -1,0 +1,62 @@
+---
+title: "Versioning and Pinning tj-actions/changed-files"
+description: "Understand how changed-files uses semantic versioning, when to pin to a major tag vs. a full version, and how to pin to a commit SHA for maximum security."
+---
+
+The `tj-actions/changed-files` action follows [Semantic Versioning](https://semver.org) to communicate the impact of each release. Understanding the version format helps you choose a pinning strategy that balances stability, predictability, and security.
+
+## Version format
+
+Releases use the format `vMAJOR.MINOR.PATCH`:
+
+- **Major** (`v47`, `v48`, …) — significant changes or new features that may not be backward compatible.
+- **Minor** (`v47.1.0`) — new features that are backward compatible.
+- **Patch** (`v47.0.5`) — bug fixes and small backward-compatible changes.
+
+GitHub also maintains a floating major-version tag (e.g. `v47`) that always points to the latest patch release within that major version. This makes it easy to receive bug fixes automatically without changing your workflow file.
+
+## Pinning strategies
+
+### Pin to a major version tag
+
+Using the floating major tag is the simplest approach. Your workflow automatically receives all minor and patch updates within that major version.
+
+```yaml
+- uses: tj-actions/changed-files@v47
+```
+
+### Pin to a specific version
+
+Pinning to a full `vMAJOR.MINOR.PATCH` tag gives you complete reproducibility. Your workflow will not change until you explicitly update the tag.
+
+```yaml
+- uses: tj-actions/changed-files@v47.0.5
+```
+
+### Pin to a commit SHA (recommended for security)
+
+<Tip>
+  GitHub's own security guidance recommends pinning third-party actions to a full-length commit SHA. This is the most secure pinning strategy.
+</Tip>
+
+Pinning to a commit SHA ensures that the exact code you reviewed is what runs — even if a tag is moved or deleted. Tags in GitHub repositories are mutable: a maintainer or an attacker who gains repository access can silently move a tag to point at different, potentially malicious code. A commit SHA cannot be altered.
+
+```yaml
+- uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323 # v47.0.5
+```
+
+Adding the version as a comment next to the SHA keeps the workflow readable while maintaining the security guarantee. You can update to a newer SHA whenever you are ready to review and adopt the changes.
+
+## Choosing the right strategy
+
+| Strategy | Reproducibility | Security | Maintenance effort |
+|---|---|---|---|
+| `@v47` (major tag) | Low | Low | Minimal |
+| `@v47.0.5` (full tag) | High | Medium | Manual updates |
+| `@<sha>` (commit SHA) | Exact | Highest | Manual updates |
+
+For production workflows or repositories with strict security requirements, always pin to a commit SHA. For personal or development workflows where convenience matters more, the major version tag is a reasonable choice.
+
+<Note>
+  For more information on securing your GitHub Actions workflows, see [GitHub's documentation on security hardening for GitHub Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions).
+</Note>

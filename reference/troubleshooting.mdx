@@ -1,0 +1,230 @@
+---
+title: "Troubleshooting tj-actions/changed-files Issues"
+description: "Fix common errors in the changed-files action: missing checkout, insufficient git history, bad glob patterns, submodule failures, and safe_output settings."
+---
+
+Most issues with `tj-actions/changed-files` fall into a small number of categories: missing repository setup steps, insufficient Git history, incorrect file pattern syntax, or output security settings. The sections below walk through each category with specific solutions.
+
+## Common errors
+
+<AccordionGroup>
+  <Accordion title="Unable to locate the git repository">
+    This error occurs when the action runs before the repository has been checked out. The `tj-actions/changed-files` action requires access to the local `.git` directory to compute diffs.
+
+    **Solution:** Add `actions/checkout` as a step before `tj-actions/changed-files` in your job.
+
+    ```yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+    ```
+  </Accordion>
+
+  <Accordion title="Only pull_request* events are supported when using GitHub's REST API">
+    This error is raised when `use_rest_api: true` is set on a `push` event or any non-pull-request event. GitHub's REST API for listing changed files only supports pull request contexts.
+
+    **Solution:** Remove `use_rest_api: true` from push event workflows and rely on the local Git diff instead. Make sure `actions/checkout` is present and `fetch-depth` is set correctly.
+
+    ```yaml
+    # For push events, do NOT use use_rest_api: true
+    on:
+      push:
+        branches:
+          - main
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # or 2
+
+      - uses: tj-actions/changed-files@v47
+    ```
+  </Accordion>
+
+  <Accordion title="Insufficient history errors on push events">
+    On `push` events, the action compares the current commit against the previous commit. If the repository is checked out with the default shallow depth of `1`, there is only one commit available and the diff cannot be computed.
+
+    **Solution:** Set `fetch-depth` to `0` (full history) or `2` (current commit plus one preceding commit) in `actions/checkout`.
+
+    ```yaml
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # full history
+    ```
+
+    ```yaml
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2  # current + one preceding commit
+    ```
+
+    <Note>
+      For `pull_request` events, the default `fetch-depth: 1` is sufficient. Only push events need a deeper fetch.
+    </Note>
+
+    If you cannot fetch a deeper history, you can also tune `fetch_depth` on the action itself (default `25`) or increase `fetch_missing_history_max_retries` (default `20`) to handle slow or large repositories.
+  </Accordion>
+
+  <Accordion title="Empty outputs on the initial commit">
+    When the action runs on a repository's very first commit, there is no preceding commit to diff against. The action exits early and returns empty outputs. This is expected behavior, not a bug.
+
+    No action is required. You can guard downstream steps with a check like `if: steps.changed-files.outputs.any_changed == 'true'` to handle this case gracefully.
+  </Accordion>
+
+  <Accordion title="Submodule diff errors">
+    If your repository contains submodules, the action may fail when it cannot fetch the history needed to diff those submodules.
+
+    **Solution 1:** Enable additional history fetching for submodules:
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      with:
+        fetch_additional_submodule_history: true
+    ```
+
+    **Solution 2:** If submodule diffs are not important for your use case, suppress the error instead:
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      with:
+        fail_on_submodule_diff_error: false
+    ```
+
+    You can also exclude submodule changes entirely with `exclude_submodules: true`.
+  </Accordion>
+</AccordionGroup>
+
+## File pattern issues
+
+<AccordionGroup>
+  <Accordion title="Patterns with quotes don't match any files">
+    Wrapping multiline `files` or `files_ignore` patterns in single or double quotes is a common mistake. The value is already a newline-separated string in YAML — adding quotes causes the literal quote characters to become part of the pattern, which will not match any real filenames.
+
+    **Incorrect:**
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      with:
+        files: |
+          "**.md"
+          "src/**"
+    ```
+
+    **Correct:**
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      with:
+        files: |
+          **.md
+          src/**
+    ```
+  </Accordion>
+
+  <Accordion title="Pattern matches files in root but not subdirectories">
+    The single-star glob `*.md` only matches files in the root directory. To match Markdown files at any depth in the repository, use the globstar pattern `**.md`.
+
+    ```yaml
+    files: |
+      **.md
+    ```
+
+    Similarly, to match all files under a directory at any depth, use `dir/**`:
+
+    ```yaml
+    files: |
+      docs/**
+    ```
+
+    This pattern matches `docs/index.md`, `docs/api/reference.md`, and any other file under `docs/`.
+  </Accordion>
+
+  <Accordion title="YAML key names for files_yaml are invalid">
+    When using `files_yaml`, all top-level key names must follow these rules:
+    - Start with a letter or underscore (`_`)
+    - Contain only alphanumeric characters, hyphens (`-`), or underscores (`_`)
+
+    Valid key names: `test`, `test_key`, `test-key`, `_test_key`
+
+    Invalid key names: `1test`, `test.key`, `test key`
+
+    If a key is invalid, the action will not produce the expected prefixed outputs.
+  </Accordion>
+</AccordionGroup>
+
+## Performance
+
+<AccordionGroup>
+  <Accordion title="The action is slow on large repositories">
+    By default, the action fetches up to 25 additional commits of branch history (`fetch_depth: 25`). On large repositories, you can tune this value to reduce fetch time:
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      with:
+        fetch_depth: 5
+    ```
+
+    If you have already configured `actions/checkout` to fetch all the history you need, you can skip the action's own fetch entirely:
+
+    ```yaml
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: tj-actions/changed-files@v47
+      with:
+        skip_initial_fetch: true
+    ```
+
+    <Warning>
+      Setting `skip_initial_fetch: true` when the required history has not been fetched may result in missing history errors.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Push event compares too many commits">
+    For push events, you can restrict the comparison to the last remote commit by setting `since_last_remote_commit: true`. This makes the action compare only what changed between the last known remote state and the current HEAD, rather than using a potentially deep history range.
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      with:
+        since_last_remote_commit: true
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Security
+
+<AccordionGroup>
+  <Accordion title="Output filenames contain unexpected characters or injection risks">
+    By default, `safe_output` is set to `true`, which sanitizes output filenames before they are written to `$GITHUB_OUTPUT`. This protects against command injection when filenames are used directly in `${{ steps.*.outputs.* }}` expressions.
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      # safe_output: true is the default — no change needed
+    ```
+
+    If you need the raw, unsanitized filenames (for example, to handle filenames with special characters correctly), set `safe_output: false`. In this case, always store the output in an environment variable rather than using it directly in an expression to avoid injection vulnerabilities.
+
+    ```yaml
+    - uses: tj-actions/changed-files@v47
+      id: changed-files
+      with:
+        safe_output: false  # Only safe when used via env vars
+
+    - name: Process files
+      env:
+        ADDED_FILES: ${{ steps.changed-files.outputs.added_files }}
+      run: |
+        for file in ${ADDED_FILES}; do
+          echo "$file was added"
+        done
+    ```
+
+    <Warning>
+      Never use `safe_output: false` output values directly in expression context (e.g., `${{ steps.changed-files.outputs.added_files }}`). Always pass them through environment variables.
+    </Warning>
+  </Accordion>
+</AccordionGroup>

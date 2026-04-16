@@ -1,0 +1,142 @@
+---
+title: "Detect and control Git submodule changes in workflows"
+description: "Learn how changed-files handles Git submodules by default, how to exclude them, fetch extra history, and control failure behavior on submodule diff errors."
+---
+
+Git submodules are nested repositories embedded within a parent repository. The `changed-files` action detects submodule changes by default as part of the normal diff. Depending on your workflow, you may want to include, exclude, or specifically handle submodule differences.
+
+## Default behavior
+
+When your repository contains submodules, the action includes submodule path changes in its output automatically. A submodule appears in the diff when its pointer commit changes — that is, when the parent repository records a new commit reference for the submodule.
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Get changed files including submodules
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: List changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+```
+
+<Note>
+Submodule paths are detected automatically based on the repository's `.gitmodules` file. You do not need to configure anything extra to include them in the diff.
+</Note>
+
+## Excluding submodule changes
+
+If you want to ignore changes to submodules entirely — for example, because submodule bumps are handled by a separate automated workflow — set `exclude_submodules: true`.
+
+```yaml
+- name: Get changed files excluding submodules
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    exclude_submodules: "true"
+```
+
+## Fetching additional submodule history
+
+Shallow clones can cause the diff to fail when the submodule's history does not extend back far enough to include the base commit. Set `fetch_additional_submodule_history: true` to fetch deeper submodule history before running the diff.
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    submodules: true
+    fetch-depth: 0
+
+- name: Get changed files with full submodule history
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    fetch_additional_submodule_history: "true"
+```
+
+<Tip>
+Use `fetch_additional_submodule_history` together with a `fetch-depth: 0` checkout to ensure the action has complete history for both the parent repository and its submodules.
+</Tip>
+
+## Handling submodule diff errors
+
+By default, the action continues even if the submodule diff fails (for example, when submodule history is unavailable). Set `fail_on_submodule_diff_error: true` to make the step fail explicitly in that case, which makes problems easier to diagnose in CI logs.
+
+```yaml
+- name: Get changed files, fail on submodule error
+  id: changed-files
+  uses: tj-actions/changed-files@v47
+  with:
+    fail_on_submodule_diff_error: "true"
+```
+
+## Complete example with submodule detection
+
+The following workflow checks out the repository and its submodules, fetches full history, and then reports which submodule paths changed.
+
+```yaml
+name: Submodule CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  detect-submodule-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Get changed files including submodules
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          fetch_additional_submodule_history: "true"
+          fail_on_submodule_diff_error: "true"
+
+      - name: List all changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+
+      - name: Run step if a specific submodule changed
+        if: contains(steps.changed-files.outputs.all_changed_files, 'vendor/my-lib')
+        run: |
+          echo "The vendor/my-lib submodule was updated."
+```
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="File filtering" icon="filter" href="/guides/file-filtering">
+    Filter changed files to specific paths including submodule directories.
+  </Card>
+  <Card title="Inputs reference" icon="sliders" href="/reference/inputs">
+    Full reference for submodule-related inputs.
+  </Card>
+</CardGroup>
